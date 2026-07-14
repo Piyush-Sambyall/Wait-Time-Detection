@@ -211,7 +211,7 @@ class SmartQueueMonitor:
                 x1,y1,x2,y2 = self.smooth(tid, list(map(int,t.to_ltrb())))
                 cx,cy = (x1+x2)//2,(y1+y2)//2
 
-                # ================= FULL FACE BLUR =================
+                # ========= FULL FACE BLUR ============
                 face_y1 = y1
                 face_y2 = y1 + int((y2 - y1) * 0.75)
                 face_x1 = x1
