@@ -5,8 +5,6 @@ from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
 from collections import defaultdict
 
-
-# =============================================================================
 class Config:
     def __init__(self):
         self.source = 0
@@ -23,9 +21,6 @@ class Config:
         self.deep_sort_max_age = 60
         self.avg_service_time = None
         self.alpha = 0.3
-
-
-# =============================================================================
 class SmartQueueMonitor:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -35,9 +30,7 @@ class SmartQueueMonitor:
         if self.device == "cuda":
             self.model = self.model.half()
 
-        # ✅ Improved tracking stability
         self.tracker = DeepSort(max_age=cfg.deep_sort_max_age, n_init=3)
-
         self.cap = cv2.VideoCapture(cfg.source)
 
         self.entry_times = {}
@@ -51,7 +44,6 @@ class SmartQueueMonitor:
 
         self.smooth_boxes = defaultdict(list)
 
-    # ================= TIME FORMAT =================
     def format_time_label(self, seconds):
         if seconds < 60:
             return f"{int(seconds)}s"
@@ -64,16 +56,12 @@ class SmartQueueMonitor:
         m = (seconds % 3600) // 60
         s = seconds % 60
         return f"{h:02d}:{m:02d}:{s:02d}"
-
-    # ================= SMOOTHING =================
     def smooth(self, tid, box):
         self.smooth_boxes[tid].append(box)
         if len(self.smooth_boxes[tid]) > 5:
             self.smooth_boxes[tid].pop(0)
         avg = [int(sum(x)/len(x)) for x in zip(*self.smooth_boxes[tid])]
         return avg
-
-    # =============================================================================
     def draw_info(self, frame, queue, wait, status, status_color, service):
         x, y = 10, 10
         current_time = time.strftime("%H:%M:%S")
@@ -117,8 +105,6 @@ class SmartQueueMonitor:
                         (x+10, yy),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
             yy += 25
-
-    # =============================================================================
     def run(self):
 
         LEFT = [81, 2424832, 65361]
@@ -182,9 +168,8 @@ class SmartQueueMonitor:
                         continue
 
                     x1,y1,x2,y2 = map(int,b.xyxy[0])
-
-                    # ✅ detection filtering (fix multiple detection issue)
                     conf = float(b.conf[0])
+
                     if conf < 0.5:
                         continue
 
@@ -214,6 +199,22 @@ class SmartQueueMonitor:
                 x1,y1,x2,y2 = self.smooth(tid, list(map(int,t.to_ltrb())))
                 cx,cy = (x1+x2)//2,(y1+y2)//2
 
+                # ========= FULL FACE BLUR ============
+                face_y1 = y1
+                face_y2 = y1 + int((y2 - y1) * 0.75)
+                face_x1 = x1
+                face_x2 = x2
+
+                face_y2 = min(face_y2, frame.shape[0])
+                face_x2 = min(face_x2, frame.shape[1])
+
+                face_roi = frame[face_y1:face_y2, face_x1:face_x2]
+
+                if face_roi.size > 0:
+                    face_roi = cv2.GaussianBlur(face_roi, (51, 51), 50)
+                    frame[face_y1:face_y2, face_x1:face_x2] = face_roi
+                # =================================================
+
                 in_q = self.cfg.queue_roi[0]<cx<self.cfg.queue_roi[2] and self.cfg.queue_roi[1]<cy<self.cfg.queue_roi[3]
                 in_s = self.cfg.service_roi[0]<cx<self.cfg.service_roi[2] and self.cfg.service_roi[1]<cy<self.cfg.service_roi[3]
 
@@ -229,7 +230,6 @@ class SmartQueueMonitor:
                     self.service_times[tid] = now
                     self.track_state[tid]="service"
 
-                # ✅ prevent duplicate service updates
                 if self.track_state[tid]=="service" and not in_s:
                     if tid in self.service_times:
                         st = now - self.service_times.get(tid, now)
@@ -249,7 +249,6 @@ class SmartQueueMonitor:
                 if in_q: queue_count+=1
                 if in_s: service_count+=1
 
-                # ✅ real-time wait update
                 if self.track_state.get(tid) == "queue":
                     wait_t = now - self.entry_times.get(tid, now)
                 elif self.track_state.get(tid) == "service":
