@@ -5,8 +5,6 @@ from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
 from collections import defaultdict
 
-
-# =============================================================================
 class Config:
     def __init__(self):
         self.source = 0
@@ -35,7 +33,7 @@ class SmartQueueMonitor:
         if self.device == "cuda":
             self.model = self.model.half()
 
-        self.tracker = DeepSort(max_age=cfg.deep_sort_max_age)
+        self.tracker = DeepSort(max_age=cfg.deep_sort_max_age, n_init=3)
         self.cap = cv2.VideoCapture(cfg.source)
 
         self.entry_times = {}
@@ -47,7 +45,6 @@ class SmartQueueMonitor:
         self.next_id = 1
         self.track_state = {}
 
-        # smoothing buffer
         self.smooth_boxes = defaultdict(list)
 
     # ================= TIME FORMAT =================
@@ -79,7 +76,7 @@ class SmartQueueMonitor:
 
         lines = [
             ("Time", current_time, (255,255,255)),
-            ("Queue", queue, (255,200,0)),
+            ("Queue", queue, (200,100,0)),
             ("Wait", self.format_time_hms(wait), (255,200,0)),
             ("Status", status, status_color),
             ("Service", service, (0,255,255)),
@@ -87,7 +84,15 @@ class SmartQueueMonitor:
         ]
 
         if self.cfg.avg_service_time:
-            lines.append(("Avg Service", self.format_time_hms(self.cfg.avg_service_time), (200,200,0)))
+            avg = self.cfg.avg_service_time
+            if avg < 60:
+                avg_text = f"{int(avg)}s"
+            else:
+                m = int(avg // 60)
+                s = int(avg % 60)
+                avg_text = f"{m:02d}:{s:02d}"
+
+            lines.append(("Avg Service", avg_text, (200,200,0)))
 
         max_width = 0
         for text, val, _ in lines:
@@ -109,7 +114,7 @@ class SmartQueueMonitor:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
             yy += 25
 
-    # =============================================================================
+  
     def run(self):
 
         LEFT = [81, 2424832, 65361]
@@ -171,8 +176,17 @@ class SmartQueueMonitor:
                 for b in r.boxes:
                     if int(b.cls[0]) != 0:
                         continue
+
                     x1,y1,x2,y2 = map(int,b.xyxy[0])
-                    detections.append(([x1,y1,x2-x1,y2-y1],1.0,'person'))
+                    conf = float(b.conf[0])
+
+                    if conf < 0.5:
+                        continue
+
+                    if (y2 - y1) < self.cfg.min_person_height:
+                        continue
+
+                    detections.append(([x1,y1,x2-x1,y2-y1], conf, 'person'))
 
             tracks = self.tracker.update_tracks(detections, frame=frame)
 
@@ -195,6 +209,20 @@ class SmartQueueMonitor:
                 x1,y1,x2,y2 = self.smooth(tid, list(map(int,t.to_ltrb())))
                 cx,cy = (x1+x2)//2,(y1+y2)//2
 
+                face_y1 = y1
+                face_y2 = y1 + int((y2 - y1) * 0.75)
+                face_x1 = x1
+                face_x2 = x2
+
+                face_y2 = min(face_y2, frame.shape[0])
+                face_x2 = min(face_x2, frame.shape[1])
+
+                face_roi = frame[face_y1:face_y2, face_x1:face_x2]
+
+                if face_roi.size > 0:
+                    face_roi = cv2.GaussianBlur(face_roi, (51, 51), 50)
+                    frame[face_y1:face_y2, face_x1:face_x2] = face_roi
+            
                 in_q = self.cfg.queue_roi[0]<cx<self.cfg.queue_roi[2] and self.cfg.queue_roi[1]<cy<self.cfg.queue_roi[3]
                 in_s = self.cfg.service_roi[0]<cx<self.cfg.service_roi[2] and self.cfg.service_roi[1]<cy<self.cfg.service_roi[3]
 
@@ -211,19 +239,30 @@ class SmartQueueMonitor:
                     self.track_state[tid]="service"
 
                 if self.track_state[tid]=="service" and not in_s:
-                    st = now - self.service_times.get(tid, now)
-                    if 3<st<120:
-                        if self.cfg.avg_service_time is None:
-                            self.cfg.avg_service_time = st
-                        else:
-                            self.cfg.avg_service_time = self.cfg.alpha*st + (1-self.cfg.alpha)*self.cfg.avg_service_time
-                        self.total_served += 1
+                    if tid in self.service_times:
+                        st = now - self.service_times.get(tid, now)
+
+                        if 3 < st < 120:
+                            if self.cfg.avg_service_time is None:
+                                self.cfg.avg_service_time = st
+                            else:
+                                self.cfg.avg_service_time = self.cfg.alpha*st + (1-self.cfg.alpha)*self.cfg.avg_service_time
+
+                            self.total_served += 1
+
+                        self.service_times.pop(tid, None)
+
                     self.track_state[tid]="done"
 
                 if in_q: queue_count+=1
                 if in_s: service_count+=1
 
-                wait_t = self.wait_times.get(tid, now - self.entry_times.get(tid, now))
+                if self.track_state.get(tid) == "queue":
+                    wait_t = now - self.entry_times.get(tid, now)
+                elif self.track_state.get(tid) == "service":
+                    wait_t = self.wait_times.get(tid, 0)
+                else:
+                    wait_t = 0
 
                 label = f"ID:{pid} W:{self.format_time_label(wait_t)}"
 
@@ -256,7 +295,6 @@ class SmartQueueMonitor:
 
             self.draw_info(frame, queue_count, wait_global, status, color_s, service_count)
 
-            # Dark strip for controls
             overlay = frame.copy()
             cv2.rectangle(overlay,(0,500),(960,540),(0,0,0),-1)
             cv2.addWeighted(overlay,0.6,frame,0.4,0,frame)
