@@ -5,8 +5,6 @@ from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
 from collections import defaultdict
 
-
-# =============================================================================
 class Config:
     def __init__(self):
         self.source = 0
@@ -24,8 +22,6 @@ class Config:
         self.avg_service_time = None
         self.alpha = 0.3
 
-
-# =============================================================================
 class SmartQueueMonitor:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -71,7 +67,7 @@ class SmartQueueMonitor:
         avg = [int(sum(x)/len(x)) for x in zip(*self.smooth_boxes[tid])]
         return avg
 
-    # =============================================================================
+
     def draw_info(self, frame, queue, wait, status, status_color, service):
         x, y = 10, 10
         current_time = time.strftime("%H:%M:%S")
@@ -116,7 +112,7 @@ class SmartQueueMonitor:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
             yy += 25
 
-    # =============================================================================
+
     def run(self):
 
         LEFT = [81, 2424832, 65361]
@@ -225,7 +221,7 @@ class SmartQueueMonitor:
                 if face_roi.size > 0:
                     face_roi = cv2.GaussianBlur(face_roi, (51, 51), 50)
                     frame[face_y1:face_y2, face_x1:face_x2] = face_roi
-                # =================================================
+             
 
                 in_q = self.cfg.queue_roi[0]<cx<self.cfg.queue_roi[2] and self.cfg.queue_roi[1]<cy<self.cfg.queue_roi[3]
                 in_s = self.cfg.service_roi[0]<cx<self.cfg.service_roi[2] and self.cfg.service_roi[1]<cy<self.cfg.service_roi[3]
