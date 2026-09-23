@@ -101,7 +101,7 @@ class SmartQueueMonitor:
         roi[3] = max(roi[1] + 10, roi[3])
         return roi
 
-    # =============================================================================
+  
     def run(self):
         while True:
             ret, frame = self.cap.read()
