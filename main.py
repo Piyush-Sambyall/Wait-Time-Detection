@@ -262,7 +262,6 @@ class SmartQueueMonitor:
             self.csv_file.close()
 
 
-# =============================================================================
 if __name__ == "__main__":
     cfg = Config()
     SmartQueueMonitor(cfg).run()
