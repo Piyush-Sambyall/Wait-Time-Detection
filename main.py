@@ -65,9 +65,7 @@ class SmartQueueMonitor:
 
         print("[INFO] Controls: Queue A/D W/S Z/X C/V | Service Arrows/IJKL | ESC")
 
-    # =============================================================================
-    # PROFESSIONAL INFO PANEL
-    # =============================================================================
+
     def draw_info(self, frame, queue, wait, status, status_color, service):
         x, y = 10, 10
         box_w, box_h = 260, 170
