@@ -5,9 +5,7 @@ import torch
 from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
 
-# =============================================================================
-# CONFIG
-# =============================================================================
+
 class Config:
     def __init__(self):
         self.source = 0  # CAMERAS
@@ -27,9 +25,7 @@ class Config:
         self.log_csv = True
 
 
-# =============================================================================
-# MAIN CLASS
-# =============================================================================
+
 class SmartQueueMonitor:
     def __init__(self, cfg):
         self.cfg = cfg
