@@ -93,7 +93,7 @@ class SmartQueueMonitor:
         if self.cfg.avg_service_time:
             put("Avg Time", f"{self.cfg.avg_service_time:.1f}s", yy, (200, 200, 0))
 
-    # =============================================================================
+    
     def fix_roi(self, roi):
         roi[0] = max(0, roi[0])
         roi[1] = max(0, roi[1])
